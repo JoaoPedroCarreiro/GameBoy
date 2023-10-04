@@ -21,8 +21,8 @@ const composer = createComposer(scene, camera.instance, scene.renderer)
 const gameboy = createGameBoy(scene, "./assets/gameboy.glb", ["Arrows", "A", "B"])
 const screen = createScreen(scene)
 
-let game = null
-// let game = createSpaceInvaders(scene)
+// let game = null
+let game = createSpaceInvaders(scene)
 // let game = createTetris(scene)
 
 let gamemode = false

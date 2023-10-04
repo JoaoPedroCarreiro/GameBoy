@@ -10,6 +10,8 @@ export default function createGameObject(scene, x, y, width, height, src) {
         y: y,
         width: width,
         height: height,
+        src: src,
+        interval: undefined
     }
 
     const texture = new Three.TextureLoader().load(src)
@@ -64,6 +66,11 @@ export default function createGameObject(scene, x, y, width, height, src) {
         newText.generateMipmaps = false
 
         material.map = newText
+        state.src = newTexture
+    }
+
+    function getTexture() {
+        return state.src
     }
 
     function intersects(rect) {
@@ -73,8 +80,22 @@ export default function createGameObject(scene, x, y, width, height, src) {
         }
     }
 
+    function animate(frames, time) {
+        let index = 0
+
+        state.interval = setInterval(() => {
+            index++
+
+            if(index === frames.length - 1) index = 0
+
+            setTexture(frames[index])
+        }, time)
+    }
+
     function remove() {
         scene.remove(obj)
+        clearInterval(state.interval)
+        state.interval = undefined
     }
 
     return {
@@ -86,6 +107,8 @@ export default function createGameObject(scene, x, y, width, height, src) {
         setY,
         setTexture,
         intersects,
-        remove
+        remove,
+        getTexture,
+        animate
     }
 }
