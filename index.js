@@ -2,10 +2,10 @@ import createScene from "src/createScene.js"
 import createCamera from "src/createCamera.js"
 import createLight from "src/createLight.js"
 import createComposer from "src/createComposer.js"
+import createListener from "src/createListener.js"
 import createGameBoy from "src/createGameBoy.js"
 import createScreen from "src/createScreen.js"
 import createSpaceInvaders from "src/createSpaceInvaders.js"
-import createTetris from "src/createTetris.js"
 
 const INTENSITY = 7.0
 const DISTANCE = 10.0
@@ -17,13 +17,13 @@ const scene = createScene()
 const camera = createCamera(scene.renderer)
 const light = createLight(scene, INTENSITY, DISTANCE, ANGLE, PENUMBRA, DECAY)
 const composer = createComposer(scene, camera.instance, scene.renderer)
+const listener = createListener(camera.instance)
 
 const gameboy = createGameBoy(scene, "./assets/gameboy.glb", ["Arrows", "A", "B"])
 const screen = createScreen(scene)
 
-// let game = null
-let game = createSpaceInvaders(scene)
-// let game = createTetris(scene)
+let game = null
+// let game = createSpaceInvaders(scene, listener)
 
 let gamemode = false
 let canInput = true
@@ -84,27 +84,22 @@ const setSmoothPos = (x, y, z, after) => {
 }
 
 const keyDown = {
-    "f": () => {
+    "i": () => {
         if(game) {
             game.finish()
             game = null
         }
 
-        game = createSpaceInvaders(scene)
-    },
-    "t": () => {
-        if(game) {
-            game.finish()
-            game = null
-        }
+        listener.context.resume()
 
-        game = createTetris(scene)
+        game = createSpaceInvaders(scene, listener)
     },
     "w": () => { game.inputs["w"]() },
     "a": () => { game.inputs["a"]() },
     "s": () => { game.inputs["s"]() },
     "d": () => { game.inputs["d"]() },
     "o": () => { game.inputs["o"]() },
+    "b": () => { game.inputs["b"]() },
     "ArrowUp": () => { game.inputs["w"]() },
     "ArrowLeft": () => { game.inputs["a"]() },
     "ArrowDown": () => { game.inputs["s"]() },
@@ -168,8 +163,23 @@ const keyDown = {
     }
 }
 
+const keyUp = {
+    "w": () => { game.inputsUp["w"]() },
+    "a": () => { game.inputsUp["a"]() },
+    "s": () => { game.inputsUp["s"]() },
+    "d": () => { game.inputsUp["d"]() },
+    "ArrowUp": () => { game.inputsUp["w"]() },
+    "ArrowLeft": () => { game.inputsUp["a"]() },
+    "ArrowDown": () => { game.inputsUp["s"]() },
+    "ArrowRight": () => { game.inputsUp["d"]() }
+}
+
 window.addEventListener("keydown", (e) => {
     if(keyDown[e.key] && canInput) keyDown[e.key]()
+})
+
+window.addEventListener("keyup", (e) => {
+    if(keyUp[e.key] && canInput) keyUp[e.key]()
 })
 
 window.addEventListener("resize", () => {
