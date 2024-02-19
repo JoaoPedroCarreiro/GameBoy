@@ -2,10 +2,10 @@ import createScene from "src/createScene.js"
 import createCamera from "src/createCamera.js"
 import createLight from "src/createLight.js"
 import createComposer from "src/createComposer.js"
-import createListener from "src/createListener.js"
 import createGameBoy from "src/createGameBoy.js"
-import createScreen from "src/createScreen.js"
-import createSpaceInvaders from "src/createSpaceInvaders.js"
+
+const inOut = (t, cur, target) => ((Math.sin((t) - Math.PI / 2) + 1) * (target - cur) / 2) + cur
+const toRad = (deg) => deg * (Math.PI / 180)
 
 const INTENSITY = 7.0
 const DISTANCE = 10.0
@@ -15,24 +15,18 @@ const DECAY = 0.1
 
 const scene = createScene()
 const camera = createCamera(scene.renderer)
+camera.disable()
 const light = createLight(scene, INTENSITY, DISTANCE, ANGLE, PENUMBRA, DECAY)
-const composer = createComposer(scene, camera.instance, scene.renderer)
-const listener = createListener(camera.instance)
+const composer = createComposer(scene, camera.instance)
 
-const gameboy = createGameBoy(scene, "./assets/gameboy.glb", ["Arrows", "A", "B"])
-const screen = createScreen(scene)
+createGameBoy(scene, "./assets/gameboy.glb", ["Arrows", "A", "B"], camera)
 
-let game = null
-// let game = createSpaceInvaders(scene, listener)
-
-let gamemode = false
 let canInput = true
 
 function render() {	
     light.followCamera(camera.instance)
 
-    if(!gamemode) camera.update()
-    if(game) game.update()
+    camera.update()
 
 	scene.render(camera.instance)
     requestAnimationFrame(render)
@@ -41,9 +35,16 @@ function render() {
 
 render()
 
-const inOut = (t, cur, target) => ((Math.sin((t) - Math.PI / 2) + 1) * (target - cur) / 2) + cur
+const animationInterval = {
+    "a": [null, false],
+    "b": [null, false],
+    "Enter": [null, false],
+    "Shift": [null, false],
+    "ArrowHor": [null, false],
+    "ArrowVer": [null, false]
+}
 
-const setSmoothPos = (x, y, z, after) => {
+function setSmoothPos (x, y, z, after) {
     const dt = 13
     const n = Math.max(
         String(x).split(".")[1] ? String(x).split(".")[1].length : 0,
@@ -83,34 +84,109 @@ const setSmoothPos = (x, y, z, after) => {
     }, dt)
 }
 
-const keyDown = {
-    "i": () => {
-        if(game) {
-            game.finish()
-            game = null
+function objectAnimation(obj, dt, key, offset, after=() => {}) {
+    let time = 0
+
+    animationInterval[key][0] = setInterval(() => {
+        obj.position.setX(inOut(time, obj.position.x, obj.position.x + offset))
+        
+        time += 0.02
+
+        if(time >= 1) {
+            clearInterval(animationInterval[key][0])
+            animationInterval[key][0] = null
+            after()
+
+            time = 0
         }
+    }, dt)
+}
 
-        listener.context.resume()
+function objectAnimationArrow(obj, dir, offset, after=() => {}) {
+    let time = 0
 
-        game = createSpaceInvaders(scene, listener)
+    animationInterval[dir][0] = setInterval(() => {
+        if(dir === "ArrowHor") {
+            obj.rotation.y = inOut(time, obj.rotation.y, obj.rotation.y + toRad(offset))
+        } else {
+            obj.rotation.z = inOut(time, obj.rotation.z, obj.rotation.z + toRad(offset))
+        }
+        time += 0.05
+
+        if(time >= 1) {
+            clearInterval(animationInterval[dir][0])
+            animationInterval[dir][0] = null
+            after()
+
+            time = 0
+        }
+    }, 10)
+}
+
+const animateObject = {
+    down: (name, key, dt, offset) => {
+        const obj = scene.instance.getObjectByName(name)
+
+        if(!animationInterval[key][0] && !animationInterval[key][1]) {
+            animationInterval[key][1] = true
+            objectAnimation(obj, dt, key, -offset, () => {
+                if(!animationInterval[key][1]) {
+                    objectAnimation(obj, dt, key, offset)
+                }
+            })
+        }
     },
-    "w": () => { game.inputs["w"]() },
-    "a": () => { game.inputs["a"]() },
-    "s": () => { game.inputs["s"]() },
-    "d": () => { game.inputs["d"]() },
-    "o": () => { game.inputs["o"]() },
-    "b": () => { game.inputs["b"]() },
-    "ArrowUp": () => { game.inputs["w"]() },
-    "ArrowLeft": () => { game.inputs["a"]() },
-    "ArrowDown": () => { game.inputs["s"]() },
-    "ArrowRight": () => { game.inputs["d"]() },
+    up: (name, key, dt, offset) => {
+        const obj = scene.instance.getObjectByName(name)
+
+        const old = animationInterval[key][1]
+
+        animationInterval[key][1] = false
+
+        if(!animationInterval[key][0] && old) {
+            objectAnimation(obj, dt, key, offset)
+        }
+    },
+    arrowDown: (dir, angleDir = 1) => {
+        const obj = scene.instance.getObjectByName("Arrows")
+
+        if(!animationInterval[dir][0] && !animationInterval[dir][1]) {
+            animationInterval[dir][1] = true
+            objectAnimationArrow(obj, dir, angleDir * 7, () => {
+                if(!animationInterval[dir][1]) {
+                    objectAnimationArrow(obj, dir, angleDir * (-7))
+                }
+            })
+        }
+    },
+    arrowUp: (dir, angleDir = 1) => {
+        const obj = scene.instance.getObjectByName("Arrows")
+
+        const old = animationInterval[dir][1]
+
+        animationInterval[dir][1] = false
+
+        if(!animationInterval[dir][0] && old) {
+            objectAnimationArrow(obj, dir, angleDir * (-7))
+        }
+    }
+}
+
+const keyDown = {
+    "a": () => { animateObject.down("A", "a", 6, 0.01) },
+    "b": () => { animateObject.down("B", "b", 6, 0.01) },
+    "Enter": () => { animateObject.down("Start", "Enter", 6, 0.005) },
+    "Shift": () => { animateObject.down("Select", "Shift", 6, 0.005) },
+    "ArrowRight": () => { animateObject.arrowDown("ArrowHor") },
+    "ArrowLeft": () => { animateObject.arrowDown("ArrowHor", -1) },
+    "ArrowUp": () => { animateObject.arrowDown("ArrowVer") },
+    "ArrowDown": () => { animateObject.arrowDown("ArrowVer", -1) },
     "v": () => {
         canInput = false
 
         camera.disable()
 
         setSmoothPos(3.5, 0, 0, () => {
-            gamemode = false
             light.setAngle(ANGLE)
             setSmoothPos(3.5, 0, 0, () => {
                 camera.enable()
@@ -118,70 +194,27 @@ const keyDown = {
                 canInput = true
             })
         })
-    },
-    "g":  () => {
-        canInput = false
-
-        camera.disable()
-
-        light.setAngle(1)
-
-        setSmoothPos(3.5, 0, 0, () => {
-            if(gamemode) {
-                gamemode = false
-                light.setAngle(ANGLE)
-                camera.enable()
-
-                canInput = true
-
-                return
-            }
-
-            gamemode = true
-            setSmoothPos(1.03, 0.565, 0, () => {
-                canInput = true
-            })
-
-            let time = 0
-            let interval = setInterval(() => {
-                camera.instance.rotation.x = inOut(time, camera.instance.rotation.x, 0)
-                camera.instance.rotation.y = inOut(time, camera.instance.rotation.y, Number((Math.PI / 2).toFixed(2)))
-                camera.instance.rotation.z = inOut(time, camera.instance.rotation.z, 0)
-    
-                if(Number(camera.instance.rotation.x.toFixed(1)) === 0 &&
-                   Number(camera.instance.rotation.y.toFixed(2)) === Number((Math.PI / 2).toFixed(2)) &&
-                   Number(camera.instance.rotation.z.toFixed(1)) === 0) {
-                    clearInterval(interval)
-                    interval = null
-
-                    return
-                }
-
-                time += 0.02
-            }, 13)
-        })
     }
 }
 
 const keyUp = {
-    "w": () => { game.inputsUp["w"]() },
-    "a": () => { game.inputsUp["a"]() },
-    "s": () => { game.inputsUp["s"]() },
-    "d": () => { game.inputsUp["d"]() },
-    "ArrowUp": () => { game.inputsUp["w"]() },
-    "ArrowLeft": () => { game.inputsUp["a"]() },
-    "ArrowDown": () => { game.inputsUp["s"]() },
-    "ArrowRight": () => { game.inputsUp["d"]() }
+    "a": () => { animateObject.up("A", "a", 6, 0.01) },
+    "b": () => { animateObject.up("B", "b", 6, 0.01) },
+    "Enter": () => { animateObject.up("Start", "Enter", 6, 0.005) },
+    "Shift": () => { animateObject.up("Select", "Shift", 6, 0.005) },
+    "ArrowRight": () => { animateObject.arrowUp("ArrowHor") },
+    "ArrowLeft": () => { animateObject.arrowUp("ArrowHor", -1) },
+    "ArrowUp": () => { animateObject.arrowUp("ArrowVer") },
+    "ArrowDown": () => { animateObject.arrowUp("ArrowVer", -1) },
 }
 
-window.addEventListener("keydown", (e) => {
-    if(keyDown[e.key] && canInput) keyDown[e.key]()
-})
+for(const key in keyUp) {
+    document.getElementById(key)?.addEventListener("mousedown", () => { keyDown[key]() })
+    document.getElementById(key)?.addEventListener("mouseup", () => { keyUp[key]() })
+}
 
-window.addEventListener("keyup", (e) => {
-    if(keyUp[e.key] && canInput) keyUp[e.key]()
-})
-
+window.addEventListener("keydown", (e) => { if(keyDown[e.key] && canInput) keyDown[e.key]() })
+window.addEventListener("keyup", (e) => { if(keyUp[e.key] && canInput) keyUp[e.key]() })
 window.addEventListener("resize", () => {
     camera.setAspect(window.innerWidth / window.innerHeight)
     camera.updateProjectionMatrix()
